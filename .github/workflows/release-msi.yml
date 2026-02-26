@@ -1,0 +1,46 @@
+name: build-msi
+
+on:
+  workflow_dispatch:
+    inputs:
+      ver:
+        required: true
+        default: "2.2.9.1701"
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+
+      - name: download
+        shell: pwsh
+        run: |
+          $ver = "${{ inputs.ver }}"
+          Invoke-WebRequest "https://github.com/win-acme/win-acme/releases/download/v$ver/win-acme.v$ver.x64.trimmed.zip" -OutFile win-acme.zip
+
+      - name: extract
+        shell: pwsh
+        run: |
+          Expand-Archive win-acme.zip src -Force
+          Copy-Item src\* . -Recurse -Force
+
+      - name: wix
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix
+          wix build main.wxs -arch x64 -d ProductVersion="${{ inputs.ver }}" -o "Win-acme-${{ inputs.ver }}.msi"
+
+      - name: release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.ver }}
+          files: Win-acme-${{ inputs.ver }}.msi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
